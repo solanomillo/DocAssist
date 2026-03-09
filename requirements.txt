@@ -1,2 +1,2 @@
 python-dotenv==1.0.0
-tkinter
+tkinter  # Nota: generalmente viene incluido con Python, es solo documentación
