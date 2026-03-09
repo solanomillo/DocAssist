@@ -1,0 +1,37 @@
+# Entorno virtual
+venv/
+env/
+ENV/
+.venv/
+
+# Archivos de Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Distribución / empaquetado
+dist/
+build/
+*.egg-info/
+*.egg
+
+# Archivos de configuración con API keys
+.env
+*.env
+
+# Base de datos vectorial temporal
+chroma_db/
+*.chroma/
+
+# IDE
+.vscode/
+.idea/
+
+# Archivos de sistema
+*.log
+*.bak
+*.swp
+.DS_Store
+Thumbs.db
