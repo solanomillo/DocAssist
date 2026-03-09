@@ -5,7 +5,8 @@ Contiene todas las áreas de la interfaz: menú, documentos, chat y entrada de p
 
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
-from ui.settings_dialog import SettingsDialog  # IMPORTANTE: Nueva importación
+from ui.settings_dialog import SettingsDialog
+from config.settings import ConfigManager  # IMPORTANTE: Nueva importación
 
 
 class RAGAssistantApp:
@@ -24,6 +25,9 @@ class RAGAssistantApp:
         self.root = root
         self.root.title("DocAssist - Asistente de Documentos")
         self.root.geometry("900x600")
+        
+        # Inicializar gestor de configuración
+        self.config_manager = ConfigManager()
         
         # Variables para configuración de API
         self.api_provider = None
@@ -53,6 +57,9 @@ class RAGAssistantApp:
         # Vincular evento de cierre
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         
+        # Cargar configuración guardada al iniciar
+        self.load_saved_configuration()
+        
         # Mostrar mensaje de bienvenida
         self.add_to_chat("Sistema", "👋 Bienvenido a DocAssist. Configura tu API en Opciones > Configurar API para comenzar.")
     
@@ -64,6 +71,8 @@ class RAGAssistantApp:
         # Menú Archivo
         file_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Archivo", menu=file_menu)
+        file_menu.add_command(label="Limpiar configuración", command=self.clear_configuration)
+        file_menu.add_separator()
         file_menu.add_command(label="Salir", command=self.on_closing, accelerator="Alt+F4")
         
         # Menú Opciones
@@ -139,7 +148,7 @@ class RAGAssistantApp:
         self.chat_display.tag_config('user', foreground='#4ec9b0')
         self.chat_display.tag_config('assistant', foreground='#ce9178')
         self.chat_display.tag_config('error', foreground='#f44747')
-        self.chat_display.tag_config('success', foreground='#6a9955')  # Nuevo tag para éxito
+        self.chat_display.tag_config('success', foreground='#6a9955')  # Tag para éxito
     
     def create_question_area(self):
         """Crea el área inferior para escribir preguntas"""
@@ -217,6 +226,25 @@ class RAGAssistantApp:
         self.chat_display.see(tk.END)
         self.chat_display.config(state='disabled')
     
+    def load_saved_configuration(self):
+        """
+        Carga la configuración guardada al iniciar la aplicación
+        """
+        config = self.config_manager.load_api_config()
+        
+        if config:
+            self.api_provider = config['provider']
+            self.api_key = config['api_key']
+            self.api_model = config['model']
+            
+            # Mostrar mensaje en el chat
+            load_message = (
+                f"⚙️ Configuración cargada automáticamente:\n"
+                f"   • Proveedor: {self.api_provider}\n"
+                f"   • Modelo: {self.api_model}"
+            )
+            self.add_to_chat("Sistema", load_message, tag_override='success')
+    
     def open_settings(self):
         """Abre el diálogo de configuración de API"""
         # Crear y mostrar el diálogo
@@ -232,20 +260,54 @@ class RAGAssistantApp:
             self.api_key = dialog.result['api_key']
             self.api_model = dialog.result['model']
             
-            # Mostrar mensaje de éxito en el chat
-            success_message = (
-                f"✅ API configurada correctamente:\n"
-                f"   • Proveedor: {self.api_provider}\n"
-                f"   • Modelo: {self.api_model}\n"
-                f"   • API Key: {'✓ Configurada' if self.api_key else '✓ No requerida (Ollama)'}"
+            # PERSISTIR LA CONFIGURACIÓN
+            save_success = self.config_manager.save_api_config(
+                provider=self.api_provider,
+                api_key=self.api_key,
+                model=self.api_model
             )
+            
+            # Mostrar mensaje de éxito en el chat
+            if save_success:
+                success_message = (
+                    f"✅ API configurada correctamente:\n"
+                    f"   • Proveedor: {self.api_provider}\n"
+                    f"   • Modelo: {self.api_model}\n"
+                    f"   • API Key: {'✓ Configurada' if self.api_key else '✓ No requerida (Ollama)'}\n"
+                    f"   • Configuración guardada permanentemente"
+                )
+            else:
+                success_message = (
+                    f"⚠️ API configurada pero NO se pudo guardar:\n"
+                    f"   • Proveedor: {self.api_provider}\n"
+                    f"   • Modelo: {self.api_model}"
+                )
+            
             self.add_to_chat("Sistema", success_message, tag_override='success')
             
-            # Habilitar el botón de carga de documentos (opcional)
-            # El motor RAG se creará en fases posteriores
             print(f"Configuración guardada: {self.api_provider} - {self.api_model}")
         else:
             self.add_to_chat("Sistema", "ℹ️ Configuración de API cancelada")
+    
+    def clear_configuration(self):
+        """
+        Limpia la configuración guardada
+        """
+        if messagebox.askyesno(
+            "Limpiar configuración",
+            "¿Estás seguro de que quieres eliminar la configuración guardada?\n\n"
+            "Esto eliminará tus API keys del archivo .env"
+        ):
+            # Limpiar variables en memoria
+            self.api_provider = None
+            self.api_key = None
+            self.api_model = None
+            
+            # Eliminar del archivo .env
+            self.config_manager.clear_api_config()
+            
+            # Mostrar mensaje
+            self.add_to_chat("Sistema", "🗑️ Configuración eliminada", tag_override='system')
     
     def load_documents(self):
         """Manejador para cargar documentos"""
