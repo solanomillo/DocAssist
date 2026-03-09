@@ -59,6 +59,7 @@ class SettingsDialog(tk.Toplevel):
         # Hacer la ventana modal
         self.transient(parent)  # Establece relación con la ventana padre
         self.grab_set()  # Captura todos los eventos
+        self.focus_set()  # Dar foco a esta ventana
         
         # Variables para almacenar los valores
         self.provider_var = tk.StringVar(value="OpenAI")  # Valor por defecto
@@ -83,8 +84,10 @@ class SettingsDialog(tk.Toplevel):
         # Vincular tecla Escape para cerrar
         self.bind('<Escape>', lambda e: self.cancel())
         
-        # Esperar a que se cierre la ventana
-        self.wait_window()
+        # NOTA: Eliminamos self.wait_window() de aquí
+        
+        # Protocolo para cuando se cierra la ventana
+        self.protocol("WM_DELETE_WINDOW", self.cancel)
     
     def configure_grid(self):
         """Configura las columnas del grid para alineación"""
@@ -143,6 +146,7 @@ class SettingsDialog(tk.Toplevel):
             font=('Arial', 9, 'italic')
         )
         self.ollama_note.grid(row=2, column=0, columnspan=2, sticky='w', pady=(0, 10))
+        self.ollama_note.grid_remove()  # Ocultar inicialmente (solo mostrar para Ollama)
         
         # --- MODELO ---
         ttk.Label(main_frame, text="Modelo:", font=('Arial', 10, 'bold')).grid(
@@ -302,6 +306,7 @@ def test_dialog():
     root.withdraw()  # Ocultar la ventana principal
     
     dialog = SettingsDialog(root)
+    root.wait_window(dialog)  # Esperar aquí en la prueba
     
     if dialog.result:
         print("✅ Configuración guardada:")
