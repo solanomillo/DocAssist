@@ -7,10 +7,10 @@ import os
 from typing import List, Optional
 from pathlib import Path
 
-# Importaciones de LangChain
+# Importaciones correctas de LangChain
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.schema import Document
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_core.documents import Document  # CORREGIDO: langchain_core.documents en lugar de langchain.schema
 
 
 class DocumentLoader:
