@@ -7,7 +7,8 @@ import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext, filedialog
 from ui.settings_dialog import SettingsDialog
 from config.settings import ConfigManager
-from core.rag_engine import RAGEngine  # IMPORTANTE: Nueva importación
+from core.rag_engine import RAGEngine
+import os
 
 
 class RAGAssistantApp:
@@ -153,7 +154,7 @@ class RAGAssistantApp:
         self.chat_display.tag_config('assistant', foreground='#ce9178')
         self.chat_display.tag_config('error', foreground='#f44747')
         self.chat_display.tag_config('success', foreground='#6a9955')
-        self.chat_display.tag_config('info', foreground='#4fc1ff')  # Nuevo tag para información
+        self.chat_display.tag_config('info', foreground='#4fc1ff')
     
     def create_question_area(self):
         """Crea el área inferior para escribir preguntas"""
@@ -268,7 +269,7 @@ class RAGAssistantApp:
             # Mensaje informativo
             info_message = (
                 f"🤖 Motor RAG inicializado correctamente\n"
-                f"   • Modo: {'Simulación' if not hasattr(self.rag_engine, 'qa_chain') else 'Completo'}"
+                f"   • Modo: Simulación (Fase 5)"
             )
             self.add_to_chat("Sistema", info_message, tag_override='info')
             
@@ -350,6 +351,8 @@ class RAGAssistantApp:
     
     def load_documents(self):
         """Manejador para cargar documentos"""
+        print("📂 Función load_documents ejecutándose")  # Para depuración
+        
         # Verificar si hay API configurada
         if not self.api_provider or not self.rag_engine:
             respuesta = messagebox.askyesno(
@@ -373,7 +376,10 @@ class RAGAssistantApp:
         )
         
         if not file_paths:
+            print("ℹ️ Usuario canceló la selección de archivos")
             return  # Usuario canceló
+        
+        print(f"📚 Archivos seleccionados: {file_paths}")
         
         # Mostrar mensaje de inicio de carga
         self.add_to_chat("Sistema", f"📚 Cargando {len(file_paths)} documento(s)...", tag_override='info')
@@ -386,7 +392,7 @@ class RAGAssistantApp:
                 # Actualizar la lista de documentos en la UI
                 self.docs_listbox.delete(0, tk.END)
                 for path in file_paths:
-                    filename = path.split('/')[-1].split('\\')[-1]  # Extraer nombre del archivo
+                    filename = os.path.basename(path)
                     self.docs_listbox.insert(tk.END, f"📄 {filename}")
                 
                 # Mostrar mensaje de éxito
@@ -414,7 +420,9 @@ class RAGAssistantApp:
     
     def ask_question(self):
         """Manejador para hacer preguntas"""
-        # Verificar si hay API configurada y documentos cargados
+        print("❓ Función ask_question ejecutándose")  # Para depuración
+        
+        # Verificar si hay API configurada y motor RAG
         if not self.api_provider or not self.rag_engine:
             messagebox.showwarning(
                 "API no configurada",
@@ -436,6 +444,8 @@ class RAGAssistantApp:
         if not question:
             messagebox.showwarning("Pregunta vacía", "Por favor, escribe una pregunta.")
             return
+        
+        print(f"Pregunta: {question}")
         
         # Mostrar la pregunta del usuario
         self.add_to_chat("Usuario", question)
@@ -461,19 +471,21 @@ class RAGAssistantApp:
             question: Pregunta del usuario
         """
         try:
+            print("🔄 Procesando pregunta...")
             # Obtener respuesta del motor RAG
             response = self.rag_engine.ask(question)
+            print(f"Respuesta: {response[:50]}...")  # Primeros 50 caracteres
             
             # Mostrar la respuesta (reemplazar el "Pensando...")
             self.remove_last_message()
             self.add_to_chat("Asistente", response)
             
         except Exception as e:
+            print(f"Error en process_question: {e}")
             # Mostrar error
             self.remove_last_message()
             error_msg = f"❌ Error al procesar la pregunta: {str(e)}"
             self.add_to_chat("Sistema", error_msg, tag_override='error')
-            print(f"Error en ask_question: {e}")
         
         finally:
             # Rehabilitar controles
@@ -493,8 +505,8 @@ class RAGAssistantApp:
         # Dividir por mensajes (asumiendo que terminan con \n\n)
         messages = content.split("\n\n")
         
-        if len(messages) > 1:
-            # Eliminar el último mensaje
+        # Eliminar el último mensaje si existe
+        if len(messages) > 2:  # Al menos un mensaje completo
             new_content = "\n\n".join(messages[:-2]) + "\n\n"
             self.chat_display.delete("1.0", tk.END)
             self.chat_display.insert("1.0", new_content)
@@ -519,3 +531,4 @@ def test_window():
 
 if __name__ == "__main__":
     test_window()
+    

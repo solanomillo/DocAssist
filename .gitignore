@@ -35,3 +35,7 @@ chroma_db/
 *.swp
 .DS_Store
 Thumbs.db
+
+# bd
+temp_chroma/
+chroma_db/

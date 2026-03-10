@@ -1,8 +1,16 @@
+# Ahora instala las versiones actualizadas
 python-dotenv==1.0.0
-tkinter  # Nota: generalmente viene incluido con Python, es solo documentación
-langchain==0.1.0 
-langchain-community==0.0.10
-openai
-anthropic
-google-generativeai
+langchain
+langchain-community
+langchain-openai 
+langchain-anthropic 
+langchain-google-genai 
+langchain-text-splitters 
+langchain-chroma
+openai 
+anthropic 
+google-generativeai 
 ollama
+pypdf
+chromadb
+tiktoken
