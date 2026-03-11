@@ -10,7 +10,6 @@ from tkinter import ttk, messagebox
 class SettingsDialog(tk.Toplevel):
     """
     Diálogo modal para configurar la API de IA
-    Hereda de Toplevel para crear una ventana independiente pero modal
     """
     
     # Diccionario con los modelos sugeridos por proveedor
@@ -45,54 +44,37 @@ class SettingsDialog(tk.Toplevel):
     def __init__(self, parent):
         """
         Inicializa el diálogo de configuración
-        
-        Args:
-            parent: Ventana padre (main_window)
         """
         super().__init__(parent)
         
         # Configuración de la ventana
         self.title("⚙️ Configurar API")
-        self.geometry("450x350")
+        self.geometry("550x380")
         self.resizable(False, False)
         
         # Hacer la ventana modal
-        self.transient(parent)  # Establece relación con la ventana padre
-        self.grab_set()  # Captura todos los eventos
-        self.focus_set()  # Dar foco a esta ventana
+        self.transient(parent)
+        self.grab_set()
+        self.focus_set()
         
-        # Variables para almacenar los valores
-        self.provider_var = tk.StringVar(value="OpenAI")  # Valor por defecto
+        # Variables
+        self.provider_var = tk.StringVar(value="OpenAI")
         self.api_key_var = tk.StringVar()
         self.model_var = tk.StringVar()
-        
-        # Resultado (se establecerá cuando se guarde)
         self.result = None
         
-        # Configurar el grid
-        self.configure_grid()
-        
-        # Crear los widgets
+        # Crear widgets
         self.create_widgets()
         
-        # Inicializar modelos según proveedor por defecto
+        # Inicializar modelos
         self.update_models_list()
         
-        # Centrar la ventana respecto al padre
+        # Centrar ventana
         self.center_window()
         
-        # Vincular tecla Escape para cerrar
+        # Vincular tecla Escape
         self.bind('<Escape>', lambda e: self.cancel())
-        
-        # NOTA: Eliminamos self.wait_window() de aquí
-        
-        # Protocolo para cuando se cierra la ventana
         self.protocol("WM_DELETE_WINDOW", self.cancel)
-    
-    def configure_grid(self):
-        """Configura las columnas del grid para alineación"""
-        self.grid_columnconfigure(0, weight=0)  # Etiquetas
-        self.grid_columnconfigure(1, weight=1)  # Campos de entrada
     
     def create_widgets(self):
         """Crea todos los widgets del diálogo"""
@@ -100,7 +82,7 @@ class SettingsDialog(tk.Toplevel):
         main_frame = ttk.Frame(self, padding="20")
         main_frame.grid(row=0, column=0, sticky='nsew')
         
-        # Configurar grid del main_frame
+        # Configurar grid
         main_frame.grid_columnconfigure(1, weight=1)
         
         # --- PROVEEDOR ---
@@ -108,57 +90,77 @@ class SettingsDialog(tk.Toplevel):
             row=0, column=0, sticky='w', pady=(0, 10)
         )
         
-        # Frame para los radiobuttons
+        # Frame para radiobuttons
         provider_frame = ttk.Frame(main_frame)
         provider_frame.grid(row=0, column=1, sticky='w', pady=(0, 10))
         
-        # Crear radiobuttons para cada proveedor
-        providers = list(self.PROVIDER_MODELS.keys())
-        for i, provider in enumerate(providers):
-            rb = ttk.Radiobutton(
-                provider_frame,
-                text=provider,
-                variable=self.provider_var,
-                value=provider,
-                command=self.on_provider_change
-            )
-            rb.grid(row=0, column=i, padx=(0, 15))
+        # Primera fila: OpenAI, Anthropic
+        ttk.Radiobutton(
+            provider_frame,
+            text="OpenAI",
+            variable=self.provider_var,
+            value="OpenAI",
+            command=self.on_provider_change
+        ).grid(row=0, column=0, padx=(0, 15), sticky='w')
+        
+        ttk.Radiobutton(
+            provider_frame,
+            text="Anthropic",
+            variable=self.provider_var,
+            value="Anthropic",
+            command=self.on_provider_change
+        ).grid(row=0, column=1, padx=(0, 15), sticky='w')
+        
+        # Segunda fila: Google Gemini, Ollama
+        ttk.Radiobutton(
+            provider_frame,
+            text="Google Gemini",
+            variable=self.provider_var,
+            value="Google Gemini",
+            command=self.on_provider_change
+        ).grid(row=1, column=0, padx=(0, 15), sticky='w', pady=(5, 0))
+        
+        ttk.Radiobutton(
+            provider_frame,
+            text="Ollama",
+            variable=self.provider_var,
+            value="Ollama",
+            command=self.on_provider_change
+        ).grid(row=1, column=1, padx=(0, 15), sticky='w', pady=(5, 0))
         
         # --- API KEY ---
         ttk.Label(main_frame, text="API Key:", font=('Arial', 10, 'bold')).grid(
-            row=1, column=0, sticky='w', pady=(0, 10)
+            row=1, column=0, sticky='w', pady=(10, 10)
         )
         
-        # Entry para API key (con ocultación de caracteres)
         self.api_key_entry = ttk.Entry(
             main_frame,
             textvariable=self.api_key_var,
-            show="•",  # Oculta los caracteres
-            width=40
+            show="•",
+            width=50
         )
-        self.api_key_entry.grid(row=1, column=1, sticky='ew', pady=(0, 10))
+        self.api_key_entry.grid(row=1, column=1, sticky='ew', pady=(10, 10), padx=(0, 10))
         
-        # Nota para Ollama (no requiere API key)
+        # Nota para Ollama
         self.ollama_note = ttk.Label(
             main_frame,
-            text="📌 Nota: Ollama no requiere API key (ejecuta modelos localmente)",
-            foreground='#666666',
+            text="📌 Ollama no requiere API key (modelos locales gratuitos)",
+            foreground='#888888',
             font=('Arial', 9, 'italic')
         )
         self.ollama_note.grid(row=2, column=0, columnspan=2, sticky='w', pady=(0, 10))
-        self.ollama_note.grid_remove()  # Ocultar inicialmente (solo mostrar para Ollama)
+        self.ollama_note.grid_remove()
         
         # --- MODELO ---
         ttk.Label(main_frame, text="Modelo:", font=('Arial', 10, 'bold')).grid(
             row=3, column=0, sticky='w', pady=(0, 20)
         )
         
-        # Combobox para seleccionar modelo
         self.model_combo = ttk.Combobox(
             main_frame,
             textvariable=self.model_var,
             state='readonly',
-            width=38
+            width=47
         )
         self.model_combo.grid(row=3, column=1, sticky='w', pady=(0, 20))
         
@@ -179,76 +181,47 @@ class SettingsDialog(tk.Toplevel):
             command=self.cancel,
             width=15
         ).pack(side='left', padx=5)
-        
-        # Configurar estado inicial de la nota de Ollama
-        self.update_ollama_note()
     
     def on_provider_change(self):
-        """
-        Se ejecuta cuando cambia el proveedor seleccionado
-        Actualiza la lista de modelos y el estado del campo API key
-        """
+        """Maneja cambio de proveedor"""
         provider = self.provider_var.get()
         self.update_models_list()
         self.update_ollama_note()
         
-        # Si es Ollama, limpiar y deshabilitar API key
         if provider == "Ollama":
-            self.api_key_var.set("")  # Limpiar API key
+            self.api_key_var.set("")
             self.api_key_entry.config(state='disabled')
         else:
             self.api_key_entry.config(state='normal')
     
     def update_ollama_note(self):
-        """Muestra/oculta la nota sobre Ollama según el proveedor"""
+        """Muestra/oculta nota de Ollama"""
         if self.provider_var.get() == "Ollama":
             self.ollama_note.grid()
         else:
             self.ollama_note.grid_remove()
     
     def update_models_list(self):
-        """Actualiza la lista de modelos según el proveedor seleccionado"""
+        """Actualiza lista de modelos"""
         provider = self.provider_var.get()
         models = self.PROVIDER_MODELS.get(provider, [])
-        
         self.model_combo['values'] = models
-        
-        # Seleccionar el primer modelo por defecto
         if models:
             self.model_var.set(models[0])
     
     def validate_inputs(self):
-        """
-        Valida que los campos requeridos estén completos
-        
-        Returns:
-            bool: True si la validación pasa, False en caso contrario
-        """
+        """Valida inputs"""
         provider = self.provider_var.get()
         
-        # Validar API key (excepto para Ollama)
         if provider != "Ollama":
             api_key = self.api_key_var.get().strip()
             if not api_key:
                 messagebox.showerror(
                     "Error de validación",
-                    f"API Key es requerida para {provider}.\n\n"
-                    "Puedes obtener tu API key en:\n"
-                    f"• OpenAI: https://platform.openai.com/api-keys\n"
-                    f"• Anthropic: https://console.anthropic.com/\n"
-                    f"• Google Gemini: https://makersuite.google.com/app/apikey"
+                    f"API Key es requerida para {provider}"
                 )
                 return False
-            
-            # Validación básica de formato (opcional)
-            if len(api_key) < 20:
-                if not messagebox.askyesno(
-                    "Advertencia",
-                    "La API key ingresada es muy corta. ¿Estás seguro de que es correcta?"
-                ):
-                    return False
         
-        # Validar que se haya seleccionado un modelo
         if not self.model_var.get():
             messagebox.showerror(
                 "Error de validación",
@@ -259,37 +232,31 @@ class SettingsDialog(tk.Toplevel):
         return True
     
     def save_settings(self):
-        """Guarda la configuración y cierra el diálogo"""
+        """Guarda configuración"""
         if not self.validate_inputs():
             return
         
-        # Guardar los valores en el resultado
         self.result = {
             'provider': self.provider_var.get(),
             'api_key': self.api_key_var.get().strip(),
             'model': self.model_var.get()
         }
-        
-        # Cerrar el diálogo
         self.destroy()
     
     def cancel(self):
-        """Cancela la configuración y cierra el diálogo"""
+        """Cancela"""
         self.result = None
         self.destroy()
     
     def center_window(self):
-        """Centra la ventana respecto a la ventana padre"""
+        """Centra ventana"""
         self.update_idletasks()
-        
-        # Obtener dimensiones de la ventana padre
         parent = self.master
         parent_x = parent.winfo_x()
         parent_y = parent.winfo_y()
         parent_width = parent.winfo_width()
         parent_height = parent.winfo_height()
         
-        # Calcular posición centrada
         width = self.winfo_width()
         height = self.winfo_height()
         
@@ -299,25 +266,11 @@ class SettingsDialog(tk.Toplevel):
         self.geometry(f'{width}x{height}+{x}+{y}')
 
 
-# Función para pruebas independientes
-def test_dialog():
-    """Función para probar el diálogo directamente"""
-    root = tk.Tk()
-    root.withdraw()  # Ocultar la ventana principal
-    
-    dialog = SettingsDialog(root)
-    root.wait_window(dialog)  # Esperar aquí en la prueba
-    
-    if dialog.result:
-        print("✅ Configuración guardada:")
-        print(f"  Proveedor: {dialog.result['provider']}")
-        print(f"  API Key: {'*' * len(dialog.result['api_key'])}")
-        print(f"  Modelo: {dialog.result['model']}")
-    else:
-        print("❌ Configuración cancelada")
-    
-    root.destroy()
-
-
 if __name__ == "__main__":
-    test_dialog()
+    root = tk.Tk()
+    root.withdraw()
+    dialog = SettingsDialog(root)
+    root.wait_window(dialog)
+    if dialog.result:
+        print("Configuración guardada:", dialog.result)
+    root.destroy()

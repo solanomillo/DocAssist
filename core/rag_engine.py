@@ -124,23 +124,39 @@ class RAGEngine:
         print(f"🔧 Ollama configurado con modelo local: {self.model}")
     
     def load_documents(self, file_paths: List[str]) -> bool:
+        """Carga documentos con prints de depuración"""
         try:
-            print(f"\n📚 Procesando {len(file_paths)} documento(s)...")
+            print(f"\n📚 ===== INICIANDO CARGA DE DOCUMENTOS =====")
+            print(f"📚 Procesando {len(file_paths)} documento(s)...")
+            
+            # 1. Procesar documentos
+            print("📚 Paso 1: Procesando documentos...")
             chunks = self._process_documents(file_paths)
+            print(f"📚 Paso 1 completado: {len(chunks)} chunks generados")
+            
             if not chunks:
                 print("❌ No se pudieron procesar los documentos")
                 return False
             
-            print("🆕 Creando base de datos vectorial...")
+            # 2. Crear vectorstore
+            print("📚 Paso 2: Creando base de datos vectorial...")
+            print(f"📚 Usando embeddings: {self.embeddings}")
+            
             self.vectorstore = Chroma.from_documents(
                 documents=chunks,
                 embedding=self.embeddings,
                 persist_directory=str(self.CHROMA_TEMP_DIR)
             )
+            print(f"📚 Paso 2 completado: Vectorstore creado")
+            
             print(f"✅ {len(chunks)} chunks procesados correctamente")
+            print(f"📚 ===== CARGA COMPLETADA =====\n")
             return True
+        
         except Exception as e:
             print(f"❌ Error cargando documentos: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     def _process_documents(self, file_paths: List[str]) -> List[Document]:
@@ -182,14 +198,28 @@ class RAGEngine:
         return chunks
     
     def ask(self, question: str) -> str:
+        """Realiza una pregunta con prints de depuración"""
         if self.vectorstore is None:
             return "⚠️ No hay documentos cargados. Por favor, carga algunos documentos primero."
+        
         try:
-            print(f"\n❓ Pregunta: {question}")
-            retriever = self.vectorstore.as_retriever(search_kwargs={"k": 4})
-            docs = retriever.invoke(question)
-            context = "\n\n".join([doc.page_content for doc in docs])
+            print(f"\n❓ ===== PROCESANDO PREGUNTA =====")
+            print(f"❓ Pregunta: {question}")
             
+            # Crear retriever
+            print("📚 Paso 1: Creando retriever...")
+            retriever = self.vectorstore.as_retriever(search_kwargs={"k": 4})
+            
+            # Obtener documentos relevantes
+            print("📚 Paso 2: Buscando documentos relevantes...")
+            docs = retriever.invoke(question)
+            print(f"📚 Paso 2 completado: {len(docs)} documentos encontrados")
+            
+            # Construir contexto
+            context = "\n\n".join([doc.page_content for doc in docs])
+            print(f"📚 Contexto generado: {len(context)} caracteres")
+            
+            # Construir prompt
             history_text = ""
             if self.chat_history:
                 history_text = "\nHistorial de la conversación:\n"
@@ -198,22 +228,30 @@ class RAGEngine:
             
             prompt = f"""Basándote en el siguiente contexto, responde la pregunta del usuario.
 
-Contexto:
-{context}
+                    Contexto:
+                    {context}
 
-{history_text}
-Pregunta actual: {question}
+                    {history_text}
+                    Pregunta actual: {question}
 
-Respuesta (basada SOLO en el contexto proporcionado):"""
+                    Respuesta (basada SOLO en el contexto proporcionado):"""
             
+            print("🤖 Paso 3: Invocando LLM...")
             response = self.llm.invoke(prompt)
+            
             answer = response.content if hasattr(response, 'content') else str(response)
             self.chat_history.append((question, answer))
-            print(f"✅ Respuesta generada usando {len(docs)} fuentes")
+            
+            print(f"✅ Respuesta generada: {len(answer)} caracteres")
+            print(f"❓ ===== PREGUNTA COMPLETADA =====\n")
+            
             return answer
+            
         except Exception as e:
             error_msg = f"❌ Error al procesar la pregunta: {str(e)}"
             print(error_msg)
+            import traceback
+            traceback.print_exc()
             return error_msg
     
     def get_document_count(self) -> int:
