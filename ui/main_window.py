@@ -1,21 +1,24 @@
 """
 Ventana principal de la aplicación DocAssist - Versión mejorada
-Contiene barra de progreso, tema moderno y mejor feedback visual
+Contiene barra de progreso, tema moderno, manejo de cuotas y mejor feedback visual
 """
 
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext, filedialog
-import sv_ttk  # Tema moderno
-from ui.settings_dialog import SettingsDialog
-from config.settings import ConfigManager
-from core.rag_engine import RAGEngine
+import sv_ttk
 import os
 import threading
+from datetime import datetime
+
+from ui.settings_dialog import SettingsDialog
+from config.settings import ConfigManager
+from core.rag_engine import RAGEngine, QuotaExceededError
 
 
 class RAGAssistantApp:
     """
     Clase principal de la interfaz gráfica - Versión con feedback visual mejorado
+    y manejo de cuotas de API
     """
     
     def __init__(self, root):
@@ -24,7 +27,7 @@ class RAGAssistantApp:
         """
         self.root = root
         self.root.title("DocAssist - Asistente de Documentos")
-        self.root.geometry("1000x650")  # Ligeramente más grande
+        self.root.geometry("1000x650")
         
         # Aplicar tema moderno (oscuro)
         sv_ttk.set_theme("dark")
@@ -36,12 +39,14 @@ class RAGAssistantApp:
         self.api_provider = None
         self.api_key = None
         self.api_model = None
+        self.api_plan = "free"  # 'free' o 'paid'
         self.rag_engine = None
         self.is_processing = False
         
         # Configurar grid principal
         self.root.grid_rowconfigure(1, weight=1)
         self.root.grid_rowconfigure(2, weight=0)
+        self.root.grid_rowconfigure(3, weight=0)
         self.root.grid_columnconfigure(0, weight=1)
         
         # Crear interfaz
@@ -72,6 +77,7 @@ class RAGAssistantApp:
         menubar.add_cascade(label="Archivo", menu=file_menu)
         file_menu.add_command(label="Limpiar configuración", command=self.clear_configuration)
         file_menu.add_command(label="Limpiar base de datos", command=self.clear_vectorstore)
+        file_menu.add_command(label="Limpiar CACHÉ completo", command=self.clear_all_cache)
         file_menu.add_separator()
         file_menu.add_command(label="Salir", command=self.on_closing, accelerator="Alt+F4")
         
@@ -86,8 +92,8 @@ class RAGAssistantApp:
         main_frame = ttk.Frame(self.root)
         main_frame.grid(row=1, column=0, padx=10, pady=5, sticky='nsew')
         
-        main_frame.grid_rowconfigure(1, weight=1)  # Fila del contenido
-        main_frame.grid_rowconfigure(0, weight=0)  # Fila de la barra de progreso
+        main_frame.grid_rowconfigure(1, weight=1)
+        main_frame.grid_rowconfigure(0, weight=0)
         main_frame.grid_columnconfigure(1, weight=3)
         main_frame.grid_columnconfigure(0, weight=1)
         
@@ -97,14 +103,14 @@ class RAGAssistantApp:
         
         self.progress_bar = ttk.Progressbar(
             self.progress_frame,
-            mode='indeterminate',
+            mode='determinate',
             length=100
         )
         self.progress_bar.pack(side='left', fill='x', expand=True, padx=(0, 5))
         
         self.progress_label = ttk.Label(
             self.progress_frame,
-            text="Procesando...",
+            text="",
             font=('Arial', 9)
         )
         self.progress_label.pack(side='right')
@@ -179,6 +185,7 @@ class RAGAssistantApp:
         self.chat_display.tag_config('error', foreground='#f44747', font=('Arial', 10, 'bold'))
         self.chat_display.tag_config('success', foreground='#6a9955', font=('Arial', 10, 'bold'))
         self.chat_display.tag_config('info', foreground='#4fc1ff', font=('Arial', 9))
+        self.chat_display.tag_config('warning', foreground='#d98e2e', font=('Arial', 10, 'bold'))
         self.chat_display.tag_config('thinking', foreground='#888888', font=('Arial', 9, 'italic'))
     
     def create_status_bar(self):
@@ -199,6 +206,14 @@ class RAGAssistantApp:
             font=('Arial', 9)
         )
         self.provider_status.pack(side='right')
+        
+        self.plan_status = ttk.Label(
+            self.status_frame,
+            text="",
+            font=('Arial', 9),
+            foreground='#888888'
+        )
+        self.plan_status.pack(side='right', padx=(0, 10))
     
     def create_question_area(self):
         """Crea el área de pregunta mejorada"""
@@ -234,7 +249,9 @@ class RAGAssistantApp:
         self.root.geometry(f'{width}x{height}+{x}+{y}')
     
     def add_to_chat(self, sender, message, tag_override=None):
-        """Añade mensaje al chat con formato mejorado"""
+        """
+        Añade mensaje al chat con formato mejorado
+        """
         self.chat_display.config(state='normal')
         
         if tag_override:
@@ -252,10 +269,7 @@ class RAGAssistantApp:
             tag = 'system'
             prefix = '📌'
         
-        timestamp = ""
-        if tag != 'thinking':
-            from datetime import datetime
-            timestamp = f"[{datetime.now().strftime('%H:%M:%S')}] "
+        timestamp = f"[{datetime.now().strftime('%H:%M:%S')}] "
         
         if not tag_override:
             formatted_message = f"{timestamp}{prefix} {sender}: {message}\n\n"
@@ -269,14 +283,19 @@ class RAGAssistantApp:
     def show_progress(self, message="Procesando..."):
         """Muestra la barra de progreso"""
         self.progress_label.config(text=message)
+        self.progress_bar['value'] = 0
         self.progress_frame.grid()
-        self.progress_bar.start(10)
         self.root.update()
     
     def hide_progress(self):
         """Oculta la barra de progreso"""
-        self.progress_bar.stop()
         self.progress_frame.grid_remove()
+        self.root.update()
+    
+    def update_progress(self, percent, message):
+        """Actualiza la barra de progreso (puede llamarse desde hilos)"""
+        self.progress_bar['value'] = percent
+        self.progress_label.config(text=message)
         self.root.update()
     
     def update_status(self, message, is_error=False):
@@ -294,72 +313,96 @@ class RAGAssistantApp:
             self.api_provider = config['provider']
             self.api_key = config['api_key']
             self.api_model = config['model']
+            self.api_plan = config.get('plan', 'free')
             self.create_rag_engine()
+            
+            plan_text = "GRATIS" if self.api_plan == "free" else "PAGO"
             self.provider_status.config(text=f"⚙️ {self.api_provider} - {self.api_model}")
-            self.add_to_chat("Sistema", f"⚙️ Configuración cargada: {self.api_provider} - {self.api_model}", 'success')
+            self.plan_status.config(text=f"📊 {plan_text}")
+            self.add_to_chat("Sistema", 
+                f"⚙️ Configuración cargada: {self.api_provider} - {self.api_model} ({plan_text})", 
+                'success')
     
     def create_rag_engine(self):
-        """Crea el motor RAG - VERSIÓN CORREGIDA (SIN barra de progreso)"""
+        """Crea el motor RAG con el plan seleccionado"""
         try:
-            # Mostrar en consola solamente
-            print(f"🔧 Inicializando RAGEngine: {self.api_provider} - {self.api_model}")
+            self.show_progress("Inicializando motor RAG...")
             
             self.rag_engine = RAGEngine(
                 provider=self.api_provider,
                 api_key=self.api_key,
-                model=self.api_model
+                model=self.api_model,
+                is_paid_plan=(self.api_plan == "paid")
             )
             
-            # Actualizar UI
+            self.hide_progress()
+            
+            plan_text = "PAGO" if self.api_plan == "paid" else "GRATIS"
             self.update_status(f"✅ Listo - {self.api_provider}")
-            self.add_to_chat("Sistema", "🤖 Motor RAG inicializado correctamente", 'info')
+            self.plan_status.config(text=f"📊 {plan_text}")
+            self.add_to_chat("Sistema", f"🤖 Motor RAG inicializado (Plan {plan_text})", 'info')
             
         except Exception as e:
-            error_msg = str(e)
-            print(f"❌ Error: {error_msg}")
-            self.update_status(f"❌ Error: {error_msg[:50]}...", True)
-            self.add_to_chat("Sistema", f"❌ Error: {error_msg}", 'error')
+            self.hide_progress()
+            self.update_status(f"❌ Error: {str(e)[:50]}...", True)
+            self.add_to_chat("Sistema", f"❌ Error al inicializar motor: {str(e)}", 'error')
             self.rag_engine = None
     
     def open_settings(self):
-        """Abre el diálogo de configuración de API - VERSIÓN CORREGIDA"""
-        # Crear y mostrar el diálogo
+        """Abre el diálogo de configuración de API"""
         dialog = SettingsDialog(self.root)
-        
-        # Esperar a que se cierre el diálogo
         self.root.wait_window(dialog)
         
-        # Procesar el resultado
         if dialog.result:
-            # Guardar la configuración
             self.api_provider = dialog.result['provider']
             self.api_key = dialog.result['api_key']
             self.api_model = dialog.result['model']
+            self.api_plan = dialog.result.get('plan', 'free')
             
-            # Guardar en .env (SIN barra de progreso)
             try:
+                # Guardar configuración
                 self.config_manager.save_api_config(
                     provider=self.api_provider,
                     api_key=self.api_key,
-                    model=self.api_model
+                    model=self.api_model,
+                    plan=self.api_plan
                 )
+                
+                # Crear motor RAG
+                self.create_rag_engine()
+                
+                # Actualizar UI
+                plan_text = "PAGO" if self.api_plan == "paid" else "GRATIS"
+                self.provider_status.config(text=f"⚙️ {self.api_provider} - {self.api_model}")
+                self.plan_status.config(text=f"📊 {plan_text}")
+                self.add_to_chat("Sistema", 
+                    f"✅ API configurada: {self.api_provider} - {self.api_model} ({plan_text})", 
+                    'success')
+                    
+            except QuotaExceededError as e:
+                self.add_to_chat("Sistema", f"⚠️ {str(e)}", 'warning')
+                messagebox.showwarning("Límite de cuota", str(e))
             except Exception as e:
-                print(f"Error guardando configuración: {e}")
-            
-            # Crear motor RAG (SIN barra de progreso)
-            self.create_rag_engine()
-            
-            # Actualizar UI
-            self.provider_status.config(text=f"⚙️ {self.api_provider} - {self.api_model}")
-            self.add_to_chat("Sistema", 
-                f"✅ API configurada: {self.api_provider} - {self.api_model}", 'success')
+                self.add_to_chat("Sistema", f"❌ Error: {str(e)}", 'error')
+                messagebox.showerror("Error", f"Error al configurar API:\n{str(e)}")
         else:
-            self.add_to_chat("Sistema", "ℹ️ Configuración cancelada")
+            self.add_to_chat("Sistema", "ℹ️ Configuración cancelada", 'info')
+    
     def load_documents(self):
-        """Manejador para cargar documentos - VERSIÓN SIMPLIFICADA SIN HILOS"""
+        """Carga documentos - SIEMPRE EMPIEZA DESDE CERO"""
         if not self.rag_engine:
             messagebox.showinfo("Info", "Configura una API primero")
             return
+        
+        # Ya no preguntamos, siempre empezamos desde cero
+        # Pero avisamos al usuario que los anteriores se borrarán
+        if self.docs_listbox.size() > 0:
+            if not messagebox.askyesno(
+                "Confirmar",
+                "Al cargar nuevos documentos, los anteriores se eliminarán.\n\n"
+                "¿Quieres continuar?"
+            ):
+                return
         
         files = filedialog.askopenfilenames(
             title="Seleccionar documentos",
@@ -369,69 +412,131 @@ class RAGAssistantApp:
         if not files:
             return
         
-        # Deshabilitar botón
+        # Crear ventana de progreso
+        progress_window = tk.Toplevel(self.root)
+        progress_window.title("Procesando documentos")
+        progress_window.geometry("450x200")
+        progress_window.transient(self.root)
+        progress_window.grab_set()
+        
+        # Centrar
+        progress_window.update_idletasks()
+        x = self.root.winfo_x() + (self.root.winfo_width() // 2) - (450 // 2)
+        y = self.root.winfo_y() + (self.root.winfo_height() // 2) - (200 // 2)
+        progress_window.geometry(f'+{x}+{y}')
+        
+        # Widgets
+        ttk.Label(progress_window, text="Procesando documentos...", font=('Arial', 10, 'bold')).pack(pady=10)
+        
+        progress_bar = ttk.Progressbar(progress_window, mode='determinate', length=400)
+        progress_bar.pack(pady=10)
+        
+        status_label = ttk.Label(progress_window, text="Iniciando...", wraplength=400)
+        status_label.pack(pady=5)
+        
+        # Frame para botones
+        button_frame = ttk.Frame(progress_window)
+        button_frame.pack(pady=10)
+        
+        cancel_btn = ttk.Button(
+            button_frame, 
+            text="Cancelar",
+            command=lambda: self.cancel_processing(progress_window)
+        )
+        cancel_btn.pack(side='left', padx=5)
+        
+        # Deshabilitar botón principal
         self.load_btn.config(state='disabled')
-        self.update_status("Procesando documentos...")
+        self.ask_btn.config(state='disabled')
         
-        # Forzar actualización de la UI
-        self.root.update()
+        def update_progress(percent, message):
+            """Actualiza la barra de progreso (llamado desde otro hilo)"""
+            progress_bar['value'] = percent
+            status_label.config(text=message)
+            progress_window.update()
         
-        try:
-            # Procesar directamente (sin hilo)
-            print(f"📂 Procesando {len(files)} archivo(s)...")
-            success = self.rag_engine.load_documents(list(files))
-            
-            if success:
-                # Actualizar lista
-                self.docs_listbox.delete(0, tk.END)
-                for f in files:
-                    self.docs_listbox.insert(tk.END, f"📄 {os.path.basename(f)}")
+        def process():
+            try:
+                # Llamar al motor - SIEMPRE empieza desde cero
+                success = self.rag_engine.load_documents(
+                    list(files), 
+                    progress_callback=update_progress
+                )
                 
-                self.ask_btn.config(state='normal')
-                self.update_status(f"✅ {len(files)} documento(s) cargado(s)")
-                self.add_to_chat("Sistema", f"✅ {len(files)} documento(s) cargado(s)", 'success')
-            else:
-                self.update_status("❌ Error al cargar documentos", True)
-                self.add_to_chat("Sistema", "❌ Error al cargar documentos", 'error')
-                
-        except Exception as e:
-            self.update_status("❌ Error", True)
-            self.add_to_chat("Sistema", f"❌ Error: {str(e)}", 'error')
-            print(f"❌ Error detallado: {e}")
-            import traceback
-            traceback.print_exc()
+                if success:
+                    self.root.after(0, lambda f=files, w=progress_window: self._on_documents_loaded(f, w))
+                else:
+                    self.root.after(0, lambda w=progress_window: self._on_documents_cancelled(w))
+                    
+            except QuotaExceededError as e:
+                error_msg = str(e)
+                self.root.after(0, lambda err=error_msg, w=progress_window: self._on_quota_error(err, w))
+            except Exception as e:
+                error_msg = str(e)
+                self.root.after(0, lambda err=error_msg, w=progress_window: self._on_documents_error(err, w))
         
-        finally:
-            # Rehabilitar botón
+        # Ejecutar en hilo separado
+        thread = threading.Thread(target=process)
+        thread.daemon = True
+        thread.start()
+        
+    def cancel_processing(self, window):
+        """Cancela el procesamiento en curso"""
+        if self.rag_engine:
+            self.rag_engine.cancel_processing()
+            window.destroy()
             self.load_btn.config(state='normal')
-            self.root.update()
+            self.add_to_chat("Sistema", "⏹️ Procesamiento cancelado por el usuario", 'system')
     
-    def _on_documents_loaded(self, success, files):
-        """Callback cuando se cargan documentos"""
-        self.hide_progress()
+    def _on_documents_loaded(self, files, window):
+        """Callback cuando se cargan documentos exitosamente"""
+        window.destroy()
         self.load_btn.config(state='normal')
         
-        if success:
-            self.docs_listbox.delete(0, tk.END)
-            for f in files:
-                self.docs_listbox.insert(tk.END, f"📄 {os.path.basename(f)}")
-            
-            self.ask_btn.config(state='normal')
-            self.update_status(f"✅ {len(files)} documento(s) cargado(s)")
-            self.add_to_chat("Sistema", f"✅ {len(files)} documento(s) cargado(s)", 'success')
-        else:
-            self.update_status("❌ Error al cargar documentos", True)
-            self.add_to_chat("Sistema", "❌ Error al cargar documentos", 'error')
-    
-    def _on_documents_error(self, error):
-        """Callback cuando hay error"""
-        self.hide_progress()
+        # Limpiar lista ANTES de agregar nuevos (por si acaso)
+        self.docs_listbox.delete(0, tk.END)
+        
+        # Agregar nuevos documentos
+        for f in files:
+            self.docs_listbox.insert(tk.END, f"📄 {os.path.basename(f)}")
+        
+        self.ask_btn.config(state='normal')
+        self.update_status(f"✅ {len(files)} documento(s) cargado(s)")
+        self.add_to_chat("Sistema", f"✅ {len(files)} documento(s) cargado(s) - Nueva sesión", 'success')
+        
+    def _on_quota_error(self, error_msg, window):
+        """Maneja error de cuota"""
+        window.destroy()
         self.load_btn.config(state='normal')
-        self.update_status("❌ Error", True)
-        self.add_to_chat("Sistema", f"❌ Error: {str(error)}", 'error')
+        
+        self.add_to_chat("Sistema", f"⚠️ Límite de cuota: {error_msg[:200]}...", 'warning')
+        
+        # Mostrar mensaje detallado
+        messagebox.showerror(
+            "Límite de cuota excedido",
+            f"{error_msg}\n\n"
+            "💡 Sugerencias:\n"
+            "• Espera unos minutos y vuelve a intentar\n"
+            "• Cambia a plan de pago en Configuración\n"
+            "• Procesa documentos más pequeños\n"
+            "• Usa Ollama local para embeddings gratuitos"
+        )
+    
+    def _on_documents_cancelled(self, window):
+        """Maneja cancelación"""
+        window.destroy()
+        self.load_btn.config(state='normal')
+        self.add_to_chat("Sistema", "⏹️ Carga cancelada", 'system')
+    
+    def _on_documents_error(self, error_msg, window):
+        """Maneja error general"""
+        window.destroy()
+        self.load_btn.config(state='normal')
+        messagebox.showerror("Error", f"Error al cargar documentos:\n{error_msg}")
+        self.add_to_chat("Sistema", f"❌ Error: {error_msg[:100]}...", 'error')
     
     def ask_question(self):
-        """Hace pregunta - VERSIÓN SIMPLIFICADA SIN HILOS"""
+        """Hace pregunta con feedback"""
         if not self.rag_engine or self.is_processing:
             return
         
@@ -449,35 +554,24 @@ class RAGAssistantApp:
         self.ask_btn.config(state='disabled')
         self.question_entry.config(state='disabled')
         self.update_status("Procesando pregunta...")
-        self.root.update()
         
-        try:
-            # Procesar directamente (sin hilo)
-            print(f"❓ Pregunta: {question}")
-            response = self.rag_engine.ask(question)
-            
-            # Mostrar respuesta
-            self.add_to_chat("Asistente", response)
-            self.update_status("✅ Listo")
-            
-        except Exception as e:
-            self.update_status("❌ Error", True)
-            self.add_to_chat("Sistema", f"❌ Error: {str(e)}", 'error')
-            print(f"❌ Error detallado: {e}")
-            import traceback
-            traceback.print_exc()
+        # Mostrar pensando
+        self.add_to_chat("Asistente", "🤔 Pensando...", 'thinking')
         
-        finally:
-            # Rehabilitar controles
-            self.is_processing = False
-            self.ask_btn.config(state='normal')
-            self.question_entry.config(state='normal')
-            self.question_entry.focus()
-            self.root.update()
+        def process():
+            try:
+                response = self.rag_engine.ask(question)
+                self.root.after(0, lambda: self._on_answer_received(response))
+            except Exception as e:
+                self.root.after(0, lambda: self._on_answer_error(e))
+        
+        thread = threading.Thread(target=process)
+        thread.daemon = True
+        thread.start()
     
-    def _on_answer_received(self, response, thinking_id):
+    def _on_answer_received(self, response):
         """Callback cuando llega la respuesta"""
-        # Eliminar mensaje de pensando y mostrar respuesta
+        # Eliminar mensaje de pensando
         self.remove_last_message()
         self.add_to_chat("Asistente", response)
         
@@ -488,10 +582,11 @@ class RAGAssistantApp:
         self.question_entry.focus()
         self.update_status("✅ Listo")
     
-    def _on_answer_error(self, error, thinking_id):
+    def _on_answer_error(self, error):
         """Callback cuando hay error"""
         self.remove_last_message()
-        self.add_to_chat("Sistema", f"❌ Error: {str(error)}", 'error')
+        error_msg = str(error)
+        self.add_to_chat("Sistema", f"❌ Error: {error_msg[:200]}...", 'error')
         
         self.is_processing = False
         self.ask_btn.config(state='normal')
@@ -499,7 +594,7 @@ class RAGAssistantApp:
         self.update_status("❌ Error", True)
     
     def remove_last_message(self):
-        """Elimina último mensaje"""
+        """Elimina último mensaje del chat"""
         self.chat_display.config(state='normal')
         content = self.chat_display.get("1.0", tk.END)
         messages = content.split("\n\n")
@@ -510,23 +605,39 @@ class RAGAssistantApp:
         self.chat_display.config(state='disabled')
     
     def clear_configuration(self):
-        """Limpia configuración"""
-        if messagebox.askyesno("Confirmar", "¿Eliminar configuración?"):
+        """Limpia configuración guardada"""
+        if messagebox.askyesno("Confirmar", "¿Eliminar configuración de API?"):
             self.api_provider = None
             self.api_key = None
             self.api_model = None
+            self.api_plan = "free"
             self.rag_engine = None
             self.config_manager.clear_api_config()
             self.provider_status.config(text="⚙️ Sin configurar")
+            self.plan_status.config(text="")
             self.add_to_chat("Sistema", "🗑️ Configuración eliminada", 'system')
     
     def clear_vectorstore(self):
         """Limpia base de datos vectorial"""
-        if self.rag_engine and messagebox.askyesno("Confirmar", "¿Eliminar base de datos?"):
+        if self.rag_engine and messagebox.askyesno("Confirmar", "¿Eliminar base de datos vectorial?"):
             self.rag_engine.clear_vectorstore()
             self.docs_listbox.delete(0, tk.END)
             self.ask_btn.config(state='disabled')
-            self.add_to_chat("Sistema", "🧹 Base de datos eliminada", 'info')
+            self.add_to_chat("Sistema", "🧹 Base de datos vectorial eliminada", 'info')
+    
+    def clear_all_cache(self):
+        """Limpia todo el caché de documentos anteriores"""
+        if messagebox.askyesno(
+            "Confirmar", 
+            "¿Eliminar todo el caché de documentos anteriores?\n\n"
+            "Esto borrará los embeddings de sesiones previas.\n"
+            "La próxima vez que cargues documentos será desde cero."
+        ):
+            if self.rag_engine:
+                self.rag_engine.clear_vectorstore()
+            self.docs_listbox.delete(0, tk.END)
+            self.ask_btn.config(state='disabled')
+            self.add_to_chat("Sistema", "🧹 Caché de documentos eliminado completamente", 'success')
     
     def on_closing(self):
         """Cierra aplicación"""

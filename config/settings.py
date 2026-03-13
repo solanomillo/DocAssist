@@ -4,6 +4,7 @@ Gestiona la persistencia de API keys y configuración usando archivo .env
 """
 
 import os
+import sys
 from pathlib import Path
 from dotenv import load_dotenv, set_key
 
@@ -18,14 +19,21 @@ class ConfigManager:
     API_PROVIDER_KEY = "DOCASSIST_API_PROVIDER"
     API_KEY_KEY = "DOCASSIST_API_KEY"
     API_MODEL_KEY = "DOCASSIST_API_MODEL"
+    API_PLAN_KEY = "DOCASSIST_API_PLAN"
     
     def __init__(self):
         """
         Inicializa el gestor de configuración
-        Define la ruta al archivo .env en la raíz del proyecto
+        Busca el .env en la carpeta del ejecutable o en la raíz del proyecto
         """
-        # Obtener la ruta raíz del proyecto (donde está main.py)
-        self.root_dir = Path(__file__).parent.parent
+        # Determinar la carpeta base (donde está el .exe o el script)
+        if getattr(sys, 'frozen', False):
+            # Estamos en un ejecutable PyInstaller
+            self.root_dir = Path(sys.executable).parent
+        else:
+            # Estamos en desarrollo
+            self.root_dir = Path(__file__).parent.parent
+        
         self.env_path = self.root_dir / '.env'
         
         # Cargar variables de entorno existentes
@@ -39,19 +47,20 @@ class ConfigManager:
             load_dotenv(self.env_path)
             print(f"✅ Archivo .env cargado desde: {self.env_path}")
         else:
-            print(f"📝 Archivo .env no encontrado. Se creará al guardar configuración.")
+            print(f"📝 Archivo .env no encontrado en {self.env_path}. Se creará al guardar configuración.")
     
-    def save_api_config(self, provider, api_key, model):
+    def save_api_config(self, provider, api_key, model, plan="free"):
         """
         Guarda la configuración de API en el archivo .env
         
         Args:
-            provider (str): Nombre del proveedor (OpenAI, Anthropic, etc.)
+            provider (str): Nombre del proveedor
             api_key (str): API key (puede estar vacía para Ollama)
             model (str): Modelo seleccionado
+            plan (str): 'free' o 'paid'
         
         Returns:
-            bool: True si se guardó correctamente, False en caso contrario
+            bool: True si se guardó correctamente
         """
         try:
             # Asegurar que el directorio existe
@@ -61,6 +70,7 @@ class ConfigManager:
             set_key(self.env_path, self.API_PROVIDER_KEY, provider)
             set_key(self.env_path, self.API_KEY_KEY, api_key if api_key else "")
             set_key(self.env_path, self.API_MODEL_KEY, model)
+            set_key(self.env_path, self.API_PLAN_KEY, plan)
             
             print(f"✅ Configuración guardada en: {self.env_path}")
             return True
@@ -74,9 +84,10 @@ class ConfigManager:
         Carga la configuración de API desde el archivo .env
         
         Returns:
-            dict: Diccionario con provider, api_key, model o None si no existe
+            dict: Diccionario con provider, api_key, model, plan o None si no existe
         """
         if not self.env_path.exists():
+            print(f"ℹ️ No existe archivo .env en {self.env_path}")
             return None
         
         # Recargar variables por si acaso
@@ -85,18 +96,20 @@ class ConfigManager:
         provider = os.getenv(self.API_PROVIDER_KEY)
         api_key = os.getenv(self.API_KEY_KEY)
         model = os.getenv(self.API_MODEL_KEY)
+        plan = os.getenv(self.API_PLAN_KEY, "free")
         
         # Verificar que tenemos todos los datos necesarios
         if provider and model:
             config = {
                 'provider': provider,
                 'api_key': api_key if api_key else "",
-                'model': model
+                'model': model,
+                'plan': plan
             }
-            print(f"✅ Configuración cargada: {provider} - {model}")
+            print(f"✅ Configuración cargada: {provider} - {model} ({plan})")
             return config
         else:
-            print("ℹ️ No se encontró configuración completa en .env")
+            print(f"ℹ️ No se encontró configuración completa en {self.env_path}")
             return None
     
     def clear_api_config(self):
@@ -118,11 +131,12 @@ class ConfigManager:
                         if not any(key in line for key in [
                             self.API_PROVIDER_KEY,
                             self.API_KEY_KEY,
-                            self.API_MODEL_KEY
+                            self.API_MODEL_KEY,
+                            self.API_PLAN_KEY
                         ]):
                             f.write(line)
                 
-                print("✅ Configuración eliminada del archivo .env")
+                print(f"✅ Configuración eliminada del archivo .env")
                 return True
             return False
             
@@ -138,44 +152,3 @@ class ConfigManager:
             Path: Ruta al archivo .env
         """
         return self.env_path
-
-
-# Función de prueba
-def test_config_manager():
-    """Prueba el funcionamiento del ConfigManager"""
-    print("🧪 Probando ConfigManager...")
-    
-    config_mgr = ConfigManager()
-    
-    # Probar guardado
-    print("\n📝 Guardando configuración de prueba...")
-    config_mgr.save_api_config(
-        provider="OpenAI",
-        api_key="sk-test123456789",
-        model="gpt-3.5-turbo"
-    )
-    
-    # Probar carga
-    print("\n📖 Cargando configuración...")
-    loaded = config_mgr.load_api_config()
-    if loaded:
-        print(f"   Proveedor: {loaded['provider']}")
-        print(f"   API Key: {'*' * len(loaded['api_key'])}")
-        print(f"   Modelo: {loaded['model']}")
-    
-    # Mostrar ruta del archivo
-    print(f"\n📁 Archivo .env en: {config_mgr.get_env_path()}")
-    
-    # Probar limpieza
-    print("\n🧹 Limpiando configuración...")
-    config_mgr.clear_api_config()
-    
-    # Verificar que se eliminó
-    loaded_after = config_mgr.load_api_config()
-    print(f"   Configuración después de limpiar: {loaded_after}")
-    
-    print("\n✅ Prueba completada")
-
-
-if __name__ == "__main__":
-    test_config_manager()

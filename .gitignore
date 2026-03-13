@@ -1,8 +1,8 @@
 # Entorno virtual
-venv/
+.venv/
 env/
 ENV/
-.venv/
+venv/
 
 # Archivos de Python
 __pycache__/
@@ -16,6 +16,7 @@ dist/
 build/
 *.egg-info/
 *.egg
+*.spec
 
 # Archivos de configuración con API keys
 .env
@@ -23,7 +24,8 @@ build/
 
 # Base de datos vectorial temporal
 chroma_db/
-*.chroma/
+temp_chroma/
+docassist_chroma/
 
 # IDE
 .vscode/
@@ -35,7 +37,3 @@ chroma_db/
 *.swp
 .DS_Store
 Thumbs.db
-
-# bd
-temp_chroma/
-chroma_db/

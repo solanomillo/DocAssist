@@ -13,3 +13,5 @@ chromadb>=0.6.0
 tiktoken>=0.9.0
 langchain-text-splitters
 sv-ttk
+langchain-chroma
+pyinstaller
