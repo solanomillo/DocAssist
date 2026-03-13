@@ -1,13 +1,13 @@
 # 📚 DocAssist - Asistente de Documentación Inteligente con RAG
-
 ![Python](https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white)
 ![LangChain](https://img.shields.io/badge/LangChain-1C3C3C?style=flat&logo=langchain&logoColor=white)
 ![Google Gemini](https://img.shields.io/badge/Google%20Gemini-8E75B2?style=flat&logo=googlegemini&logoColor=white)
 ![Tkinter](https://img.shields.io/badge/Tkinter-UI-FF6F61?style=flat&logo=python&logoColor=white)
 ![ChromaDB](https://img.shields.io/badge/ChromaDB-FF6B6B?style=flat&logo=databricks&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-green?style=flat)
+![License](https://img.shields.io/badge/License-MIT-green?style=flat) 
 
-**DocAssist** es un asistente de escritorio inteligente que utiliza **RAG** (Retrieval-Augmented Generation) para responder preguntas basándose exclusivamente en tus documentos locales (PDF y TXT). Con una interfaz moderna y oscura, permite mantener el control total de tus datos y costos.
+DocAssist es un asistente de escritorio inteligente que utiliza  RAG (Retrieval-Augmented Generation) para responder preguntas basándose exclusivamente en tus documentos locales (PDF y TXT). Con una interfaz moderna y oscura, permite mantener el control total de tus datos y costos.
+
 ---
 
 ## 📌 Descripción
@@ -137,7 +137,7 @@ DOCASSIST/
 
 1️⃣ Clonar el repositorio
 ```bash
-git clone https://github.com/tu-usuario/DocAssist.git
+git clone https://github.com/solanomillo/DocAssist.git
 cd DocAssist
 ```
 
